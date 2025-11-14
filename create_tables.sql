@@ -12,8 +12,8 @@ CREATE TABLE campaigns (
 -- 490 unique fb_campaign_ids means ads are grouped differently on Facebook
 CREATE TABLE ads (
     ad_id INTEGER PRIMARY KEY,
-    campaign_id INTEGER NOT NULL,
-    fb_campaign_id INTEGER NOT NULL,
+    campaign_id INTEGER,
+    fb_campaign_id INTEGER,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_ads_campaign FOREIGN KEY (campaign_id) 
         REFERENCES campaigns(campaign_id) ON DELETE CASCADE
@@ -34,12 +34,6 @@ CREATE TABLE audience_segments (
     interest_1 INTEGER,
     interest_2 INTEGER,
     interest_3 INTEGER,
-    -- segment_hash VARCHAR(64) GENERATED ALWAYS AS (
-    --     MD5(CONCAT(age_range, '-', gender, '-', 
-    --                COALESCE(interest_1::TEXT, '0'), '-', 
-    --                COALESCE(interest_2::TEXT, '0'), '-', 
-    --                COALESCE(interest_3::TEXT, '0')))
-    -- ) STORED,
     CONSTRAINT unique_segment UNIQUE (age_range, gender, interest_1, interest_2, interest_3)
 );
 
