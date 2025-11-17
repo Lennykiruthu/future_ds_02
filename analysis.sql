@@ -1,3 +1,4 @@
+-- Denormalize tables for faster querying and create important feature columns.
 CREATE OR REPLACE VIEW vw_performance_complete as
 SELECT
     ap.performance_id,
@@ -38,7 +39,7 @@ LEFT JOIN audience_segments as aus ON ap.segment_id = aus.segment_id;
 -- View 2: Campaign Summary
 CREATE OR REPLACE VIEW vw_campaign_summary AS
 SELECT 
-    c.campaign_id,
+    a.campaign_id,
     COUNT(DISTINCT a.ad_id) as total_ads,
     COUNT(DISTINCT a.fb_campaign_id) as unique_fb_campaigns,
     COUNT(DISTINCT ap.segment_id) as unique_segments_targeted,
@@ -53,10 +54,10 @@ SELECT
     ROUND(SUM(ap.spent) / NULLIF(SUM(ap.clicks), 0), 2) as avg_cpc,
     ROUND(100.0 * SUM(ap.approved_conversion) / NULLIF(SUM(ap.clicks), 0), 2) as overall_conversion_rate,
     ROUND(SUM(ap.spent) / NULLIF(SUM(ap.approved_conversion), 0), 2) as overall_cpa
-FROM campaigns c
-LEFT JOIN ads a ON c.campaign_id = a.campaign_id
-LEFT JOIN ad_performance ap ON a.ad_id = ap.ad_id
-GROUP BY c.campaign_id;
+FROM ads as a
+LEFT JOIN campaigns as c ON c.campaign_id = a.campaign_id
+LEFT JOIN ad_performance as ap ON a.ad_id = ap.ad_id
+GROUP BY a.campaign_id;
 
 -- View 3: Ad-Level Performance
 CREATE OR REPLACE VIEW vw_ad_summary AS
@@ -73,8 +74,8 @@ SELECT
     ROUND(100.0 * SUM(ap.clicks) / NULLIF(SUM(ap.impressions), 0), 2) as ctr,
     ROUND(SUM(ap.spent) / NULLIF(SUM(ap.approved_conversion), 0), 2) as cpa,
     ROUND(AVG(ap.spent), 2) as avg_daily_spend
-FROM ads a
-LEFT JOIN ad_performance ap ON a.ad_id = ap.ad_id
+FROM ads as a
+LEFT JOIN ad_performance as ap ON a.ad_id = ap.ad_id
 GROUP BY a.ad_id, a.campaign_id, a.fb_campaign_id;
 
 -- View 4: Audience Segment Performance
@@ -95,9 +96,9 @@ SELECT
     ROUND(AVG(100.0 * ap.clicks / NULLIF(ap.impressions, 0)), 2) as avg_ctr,
     ROUND(AVG(100.0 * ap.approved_conversion / NULLIF(ap.clicks, 0)), 2) as avg_conversion_rate,
     ROUND(AVG(ap.spent / NULLIF(ap.approved_conversion, 0)), 2) as avg_cpa
-FROM audience_segments aus
-JOIN ad_performance ap ON aus.segment_id = ap.segment_id
-JOIN ads a ON ap.ad_id = a.ad_id
+FROM audience_segments as aus
+JOIN ad_performance as ap ON aus.segment_id = ap.segment_id
+JOIN ads as a ON ap.ad_id = a.ad_id
 GROUP BY aus.segment_id, aus.age_range, aus.gender, 
          aus.interest_1, aus.interest_2, aus.interest_3;
 
@@ -113,8 +114,8 @@ SELECT
     SUM(ap.approved_conversion) as daily_conversions,
     ROUND(100.0 * SUM(ap.clicks) / NULLIF(SUM(ap.impressions), 0), 2) as daily_ctr,
     ROUND(SUM(ap.spent) / NULLIF(SUM(ap.approved_conversion), 0), 2) as daily_cpa
-FROM ad_performance ap
-JOIN ads a ON ap.ad_id = a.ad_id
+FROM ad_performance as ap
+JOIN ads as a ON ap.ad_id = a.ad_id
 GROUP BY ap.reporting_start
 ORDER BY ap.reporting_start;
 
@@ -197,25 +198,91 @@ SELECT
     END as efficiency_status
 
 FROM ad_metrics
-WHERE total_spent > 0 
-  AND total_approved_conversions > 0   -- Only include ads with actual spend
+WHERE total_spent > 0    -- Only include ads with actual spend
 ORDER BY campaign_id, rank_by_cpa;
 
-SELECT *
-FROM vw_ad_performance_ranking;
 
-DROP VIEW vw_ad_performance_ranking;
+-- SELECT *
+-- FROM vw_ad_performance_ranking;
 
-SELECT * FROM vw_performance_complete;
-SELECT * FROM vw_campaign_summary;
-SELECT * FROM vw_ad_summary;
-SELECT * FROM vw_audience_performance;
-SELECT * FROM vw_daily_trends;
-
-
+-- ============================================
+-- Companion View: Quick Top/Bottom Summary
+-- Purpose: Show just the best and worst performers per campaign
+-- ============================================
+CREATE OR REPLACE VIEW vw_campaign_top_bottom_ads AS 
+WITH ranked_ads AS (
+    SELECT 
+        *,
+        ROW_NUMBER() OVER (PARTITION BY campaign_id ORDER BY cpa ASC NULLs LAST) as best_rank,
+        ROW_NUMBER() OVER (PARTITION BY campaign_id ORDER BY cpa DESC NULLs LAST) as worst_rank
+    FROM vw_ad_performance_ranking
+)
 SELECT
-    (SELECT COUNT(DISTINCT pc.ad_id) FROM vw_performance_complete as pc),
-    (SELECT COUNT(DISTINCT campaign_id) FROM vw_campaign_summary) as campaign_summary_count,
-    (SELECT COUNT(DISTINCT ad_id) FROM vw_ad_summary) as ad_summary_count,
-    (SELECT COUNT(DISTINCT segment_id) FROM vw_audience_performance) as segments_count,
-    (SELECT COUNT(DISTINCT date) FROM vw_daily_trends) as daily_trends_count;    
+    campaign_id,
+    ad_id,
+    cpa,  
+    CASE 
+        WHEN best_rank <= 5 THEN 'Top ' || best_rank
+        WHEN worst_rank <= 5 THEN 'Bottom ' || worst_rank        
+        ELSE NULL
+    END as performance_position,
+    total_spent,
+    total_approved_conversions,
+    conversion_rate,
+    ctr,      
+    total_ads_in_campaign
+FROM ranked_ads
+WHERE best_rank <=5 OR worst_rank <=5
+ORDER BY campaign_id, best_rank;
+
+-- ============================================
+-- Interest View: Show count of each interest
+-- ============================================
+CREATE OR REPLACE VIEW vw_interest_analysis AS
+SELECT
+    interest,
+    COUNT(*) AS occurrence
+FROM (
+    SELECT auc.interest_1 as interest
+    FROM ad_performance as ap
+    LEFT JOIN audience_segments as auc ON ap.segment_id = auc.segment_id
+
+    UNION ALL
+
+    SELECT auc.interest_2 as interest
+    FROM ad_performance as ap
+    LEFT JOIN audience_segments as auc ON ap.segment_id = auc.segment_id    
+
+    UNION ALL
+
+    SELECT auc.interest_3 as interest
+    FROM ad_performance as ap
+    LEFT JOIN audience_segments as auc ON ap.segment_id = auc.segment_id    
+
+) AS all_interests
+WHERE interest IS NOT NULL
+GROUP BY interest
+ORDER BY occurrence DESC;
+
+
+
+-- SELECT *
+-- FROM vw_campaign_top_bottom_ads;
+
+-- SELECT * FROM vw_performance_complete;
+-- SELECT * FROM vw_campaign_summary;
+-- SELECT * FROM vw_ad_summary WHERE segments_targeted = 1;
+-- SELECT * FROM ad_performance;
+-- SELECT 
+--     *,
+--     SUM(daily_spend) OVER(ORDER BY date) as cumulative_spend
+-- FROM vw_daily_trends;
+-- SELECT * FROM vw_interest_analysis;
+
+-- SELECT
+--     (SELECT COUNT(DISTINCT pc.ad_id) FROM vw_performance_complete as pc),
+--     (SELECT COUNT(DISTINCT campaign_id) FROM vw_campaign_summary) as campaign_summary_count,
+--     (SELECT COUNT(DISTINCT ad_id) FROM vw_ad_summary) as ad_summary_count,
+--     (SELECT COUNT(DISTINCT segment_id) FROM vw_audience_performance) as segments_count,
+--     (SELECT COUNT(DISTINCT date) FROM vw_daily_trends) as daily_trends_count,
+--     (SELECT COUNT(*) FROM vw_interest_analysis) as interests_count;   

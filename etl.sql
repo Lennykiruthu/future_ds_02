@@ -65,13 +65,6 @@ WHERE campaign_id IS NOT NULL
 GROUP BY campaign_id
 ON CONFLICT (campaign_id) DO NOTHING;
 
---verify
--- SELECT 
---     COUNT(*) as total_campaigns,
---     MIN(campaign_id) as min_campaign_id,
---     MAX(campaign_id) as max_campaign_id
--- FROM campaigns;
-
 -- ============================================
 -- STEP 4: POPULATE ADS TABLE
 -- ============================================
@@ -83,24 +76,6 @@ SELECT
 FROM staging_raw_data
 WHERE ad_id IS NOT NULL 
 ON CONFLICT (ad_id) DO NOTHING;
-
--- -- verify
--- SELECT 
---     COUNT(*) as total_ads,
---     COUNT(DISTINCT campaign_id) as campaigns_with_ads,
---     COUNT(DISTINCT fb_campaign_id) as unique_fb_campaigns_ads,
---     MIN(ad_id) as min_ad_id,
---     MAX(ad_id) as max_ad_id
--- FROM ads;
-
--- -- check ad distribution per campaign
--- SELECT
---     campaign_id,
---     COUNT(*) as total_ads,
---     COUNT(DISTINCT fb_campaign_id) as fb_campaign_count
--- FROM ads
--- GROUP BY campaign_id
--- ORDER BY campaign_id;
 
 -- ============================================
 -- STEP 5: POPULATE AUDIENCE_SEGMENTS TABLE
@@ -116,39 +91,6 @@ FROM staging_raw_data
 WHERE age IS NOT NULL 
   AND gender IS NOT NULL
 ON CONFLICT (age_range, gender, interest_1, interest_2, interest_3) DO NOTHING;
-
--- -- Verify
--- SELECT 
---     COUNT(*) as total_segments,
---     COUNT(DISTINCT age_range) as unique_ages,
---     COUNT(DISTINCT gender) as unique_genders,
---     COUNT(DISTINCT interest_1) as unique_interest1,
---     COUNT(DISTINCT interest_2) as unique_interest2,
---     COUNT(DISTINCT interest_3) as unique_interest3
--- FROM audience_segments;
-
--- -- View sample segments
--- SELECT * FROM audience_segments LIMIT 20;
-
--- -- Check interest distribution
--- SELECT
-
---     'interest_1' as interest_type,
---     COUNT(DISTINCT interest_1) as unique_values,
---     COUNT(*) as total_segments
--- FROM audience_segments
--- UNION ALL
--- SELECT
---     'interest_2',
---     COUNT(DISTINCT interest_2),
---     COUNT(*)
--- FROM audience_segments
--- UNION ALL
--- SELECT
---     'interest_3',
---     COUNT(DISTINCT interest_3),
---     COUNT(*)
--- FROM audience_segments;
 
 -- ============================================
 -- STEP 6: POPULATE AD_PERFORMANCE TABLE
@@ -184,67 +126,3 @@ JOIN audience_segments as auc ON
 WHERE s.ad_id IS NOT NULL
 ON CONFLICT (ad_id, segment_id, reporting_start, reporting_end) DO NOTHING;
 
-
--- -- Verify
--- SELECT 
---     COUNT(*) as total_performance_records,
---     COUNT(DISTINCT ad_id) as unique_ads,
---     COUNT(DISTINCT segment_id) as unique_segments,
---     COUNT(DISTINCT reporting_start) as unique_start_dates,
---     COUNT(DISTINCT reporting_end) as unique_end_dates,
---     SUM(impressions) as total_impressions,
---     SUM(clicks) as total_clicks,
---     SUM(spent) as total_spent,
---     SUM(approved_conversion) as total_conversions
--- FROM ad_performance;
-
--- -- Check date range
--- SELECT 
---     MIN(reporting_start) as earliest_date,
---     MAX(reporting_end) as latest_date,
---     COUNT(DISTINCT reporting_start) as unique_reporting_days
--- FROM ad_performance;
-
--- ============================================
--- STEP 8: DATA VALIDATION QUERIES
--- ============================================
--- validate referential integrity
--- SELECT 
---     'Orphan ads (no campaign)' as check_type,
---     COUNT(*) as issue_count
--- FROM ads a
--- LEFT JOIN campaigns c ON a.campaign_id = c.campaign_id
--- WHERE c.campaign_id IS NULL
--- UNION ALL
--- SELECT 
---     'Orphan performance (no ad)',
---     COUNT(*)
--- FROM ad_performance ap
--- LEFT JOIN ads a ON ap.ad_id = a.ad_id
--- WHERE a.ad_id IS NULL
--- UNION ALL
--- SELECT 
---     'Orphan performance (no segment)',
---     COUNT(*)
--- FROM ad_performance ap
--- LEFT JOIN audience_segments aus ON ap.segment_id = aus.segment_id
--- WHERE aus.segment_id IS NULL;
-
--- -- Compare staging vs final tables
--- SELECT 
---     'Staging Table' as source,
---     COUNT(*) as row_count,
---     SUM(impressions) as total_impressions,
---     SUM(clicks) as total_clicks,
---     SUM(spent) as total_spent,
---     SUM(approved_conversion) as total_conversions
--- FROM staging_raw_data
--- UNION ALL
--- SELECT 
---     'Ad Performance Table',
---     COUNT(*),
---     SUM(impressions),
---     SUM(clicks),
---     SUM(spent),
---     SUM(approved_conversion)
--- FROM ad_performance;
