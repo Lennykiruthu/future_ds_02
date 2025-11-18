@@ -77,68 +77,68 @@ This dashboard was designed to help marketing teams and sellers understand their
 ## Implementation.
 - If starting with `data.csv`, first run `initial-analysis.ipynb` to fix data misalignment issues, however `data-fixed.csv` is present in the repository.
 - Next create a local postgres database and run `create-tables.sql` to populate it.
-	- ### **`campaigns`*
+	- ### `campaigns`
 		- Stores each unique marketing campaign.
 		- Links to all ads belonging to the campaign.
 		- Used for campaign-level reporting and grouping
-	- ### **`ads`**
+	- ### `ads`
 		- Stores each individual ad creative/unit.
 		- Connected to a specific campaign.
 		- Used for ad-level performance analysis and comparisons.
 	
-	- ###  **`audience_segments`**
+	- ###  `audience_segments`
 		- Stores unique audience targeting combinations.
 		- Includes age, gender, and interests 1–3.
 		- Used to analyze performance by demographic and interests.
 	
-	- ### **`ad_performance`**
+	- ### `ad_performance`
 		- Main fact table containing performance metrics.
 		- One record = ad × audience segment × date range.
 		- Stores impressions, clicks, spend, total conversions, and approved conversions.
 		- Basis for all KPI calculations and trend analysis.
-	- ### **`staging_raw_data`**
+	- ### `staging_raw_data`
 		- Temporary landing table for raw CSV uploads.
 		- Holds unprocessed data exactly as it appears in the file.
 		- Used for cleaning, validation, and populating normalized tables.
 
 - Next run `etl.sql` to insert data into the various tables made in the previous step
 - Lastly run `analysis.sql` to create 7 views that greatly help with analysis and creating a deeper understanding on the data, they are:
-	- **`vw_performance_complete`** 
+	- `vw_performance_complete` 
 		- Denormalizes all key tables: ad performance, ads, campaigns, audience segments.
 		- Produces a single wide table containing all raw metrics + calculated KPIs.
 		- Useful for dashboards, exploratory analysis, and data science feature engineering.
 		- Includes CTR, CPC, CPA, conversion rate, approval rate, and CPM.
-	- **`vw_campaign_summary`
+	- `vw_campaign_summary`
 		- Aggregates ad-level performance up to the campaign level.
 		- Gives total impressions, clicks, conversions, spend, CTR, CPC, CPA, etc.
 		- Identifies campaign time span, number of ads, unique segments targeted.
 		- Useful for campaign performance monitoring and reporting.
-	- **`vw_ad_summary`
+	- `vw_ad_summary`
 		- Summarizes performance for each ad across all days and segments.
 		- Provides total impressions, clicks, conversions, CPA, CTR, avg daily spend.
 		- Includes activity metrics like days active and segments targeted.
 		- Enables quick comparison of ads within or across campaigns.
-	- **`vw_audience_performance`
+	- `vw_audience_performance`
 		- Shows performance per audience segment.
 		- Breaks down impressions, clicks, conversions, spend by segment attributes.
 		- Calculates average CTR, conversion rate, and CPA across segment instances.
 		- Useful for audience optimization and identifying high-value cohorts.
-	- **`vw_daily_trends`
+	- `vw_daily_trends`
 		- Summarizes platform-wide performance by day.
 		- Tracks daily spend, impressions, clicks, conversions, CTR, CPA.
 		- Shows number of active ads and campaigns each day.
 		- Used for trend analysis, pacing, anomaly detection.## 
-	- **`vw_ad_performance_ranking`
+	- `vw_ad_performance_ranking`
 		- Computes aggregated performance metrics per ad.
 		- Ranks ads within each campaign by CPA, CTR, conversion rate, conversions.
 		- Adds percentile scores, top/middle/bottom performance tiers.
 		- Provides flags: “High Performer”, “Underperformer”, “Average”.
 		- Enables ranking-based optimization and leadership reporting.
-	- ## **`vw_campaign_top_bottom_ads`
+	- ## `vw_campaign_top_bottom_ads`
 		- Extracts top 5 and bottom 5 ads per campaign based on CPA.
 		- Shows performance position ("Top 1", "Bottom 3", etc.).
 		- Useful for rapid campaign health checks and weekly reporting.
-	- ## **`vw_interest_analysis`
+	- ## `vw_interest_analysis`
 		- Counts how often each interest appears across all segments in performance data.
 		- Unifies interest_1, interest_2, interest_3 into one frequency table.
 		- Useful for discovering dominant interests and planning targeting strategy.
